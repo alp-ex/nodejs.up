@@ -12,6 +12,8 @@ const RESOURCES_FILE_PATH = path.join(__dirname, "resources.md");
 const SKILLS_FILE_PATH = path.join(__dirname, "skills.json");
 const SCORE_FILE_PATH = path.join(__dirname, "skill_score.json");
 
+const debug = process.argv.includes("--debug");
+
 if (!OPENAI_API_KEY) {
   console.error("Please set your OPENAI_API_KEY in the environment variables.");
   process.exit(1);
@@ -21,6 +23,12 @@ const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
 });
+
+function debugLog(message) {
+  if (debug) {
+    console.log(message);
+  }
+}
 
 async function askQuestion(query) {
   return new Promise((resolve) => rl.question(query, resolve));
@@ -52,28 +60,51 @@ async function fetchAPI(url, options) {
   });
 }
 
+function startLoading(message) {
+  let loadingDots = "";
+  const loadingMessage = message;
+  process.stdout.write(loadingMessage);
+
+  const loadingInterval = setInterval(() => {
+    if (loadingDots.length < 3) {
+      loadingDots += ".";
+    } else {
+      loadingDots = "";
+    }
+    process.stdout.clearLine();
+    process.stdout.cursorTo(0);
+    process.stdout.write(loadingMessage + loadingDots);
+  }, 500);
+
+  return () => {
+    clearInterval(loadingInterval);
+    process.stdout.clearLine();
+    process.stdout.cursorTo(0);
+  };
+}
+
 // Read the skill score from a file
 function readSkillScore() {
   if (fs.existsSync(SCORE_FILE_PATH)) {
     const data = fs.readFileSync(SCORE_FILE_PATH);
-    console.log("Skill score loaded:", data);
+    debugLog("Skill score loaded: " + data);
     return JSON.parse(data);
   }
-  console.log("No existing skill score found.");
+  debugLog("No existing skill score found.");
   return {};
 }
 
 // Write the skill score to a file
 function writeSkillScore(score) {
   fs.writeFileSync(SCORE_FILE_PATH, JSON.stringify(score, null, 2));
-  console.log("Skill score saved:", score);
+  debugLog("Skill score saved: " + JSON.stringify(score, null, 2));
 }
 
 // Read the resources file
 function readResources() {
   if (fs.existsSync(RESOURCES_FILE_PATH)) {
     const data = fs.readFileSync(RESOURCES_FILE_PATH, "utf8");
-    console.log("Resources content loaded.");
+    debugLog("Resources content loaded.");
     return data;
   }
   console.error("resources.md file not found.");
@@ -84,17 +115,17 @@ function readResources() {
 function readOrInitializeSkills() {
   if (fs.existsSync(SKILLS_FILE_PATH)) {
     const data = JSON.parse(fs.readFileSync(SKILLS_FILE_PATH));
-    console.log("Skills loaded:", data);
+    debugLog("Skills loaded: " + JSON.stringify(data));
     return data;
   }
-  console.log("No existing skills found.");
+  debugLog("No existing skills found.");
   return {};
 }
 
 // Write skills to a file
 function writeSkills(skills) {
   fs.writeFileSync(SKILLS_FILE_PATH, JSON.stringify(skills, null, 2));
-  console.log("Skills saved:", skills);
+  debugLog("Skills saved: " + JSON.stringify(skills, null, 2));
 }
 
 // Generate skills based on the resources content
@@ -110,7 +141,9 @@ Example response:
   "Skill 3"
 ]`;
 
-  console.log("Generating skills...");
+  debugLog("Generating skills...");
+
+  const stopLoading = startLoading("Updating skills");
   const data = await fetchAPI("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -126,8 +159,9 @@ Example response:
       max_tokens: 1500,
     }),
   });
+  stopLoading();
 
-  console.log("Skills generated:", data.choices[0].message.content.trim());
+  debugLog("Skills generated: " + data.choices[0].message.content.trim());
   return JSON.parse(data.choices[0].message.content.trim());
 }
 
@@ -147,7 +181,9 @@ Example response:
   }
 ]`;
 
-  console.log("Generating flashcards...");
+  debugLog("Generating flashcards...");
+
+  const stopLoading = startLoading("Generating flashcards");
   const data = await fetchAPI("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -163,8 +199,9 @@ Example response:
       max_tokens: 1500,
     }),
   });
+  stopLoading();
 
-  console.log("Flashcards generated:", data.choices[0].message.content.trim());
+  debugLog("Flashcards generated: " + data.choices[0].message.content.trim());
   return JSON.parse(data.choices[0].message.content.trim());
 }
 
@@ -183,7 +220,9 @@ Example response:
   "skills": ["Node.js Basics"]
 }`;
 
-  console.log("Getting feedback...");
+  debugLog("Getting feedback...");
+
+  const stopLoading = startLoading("Getting feedback");
   const data = await fetchAPI("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -199,21 +238,22 @@ Example response:
       max_tokens: 150,
     }),
   });
+  stopLoading();
 
-  console.log("Feedback received:", data.choices[0].message.content.trim());
+  debugLog("Feedback received: " + data.choices[0].message.content.trim());
   return JSON.parse(data.choices[0].message.content.trim());
 }
 
 async function runFlashcardSession() {
-  console.log("Reading skill score...");
+  debugLog("Reading skill score...");
   let skillScore = readSkillScore();
-  console.log("Reading resources content...");
+  debugLog("Reading resources content...");
   const resourcesContent = readResources();
-  console.log("Reading or initializing skills...");
+  debugLog("Reading or initializing skills...");
   let skills = readOrInitializeSkills();
 
   if (Object.keys(skills).length === 0) {
-    console.log("Generating new skills...");
+    debugLog("Generating new skills...");
     skills = await generateSkills(resourcesContent);
     writeSkills(skills);
   }
@@ -222,7 +262,7 @@ async function runFlashcardSession() {
     Object.keys(skillScore).length > 0
       ? skillScore
       : skills.reduce((acc, skill) => ({ ...acc, [skill]: 1 }), {});
-  console.log("Generating flashcards...");
+  debugLog("Generating flashcards...");
   const flashcards = await generateFlashcards(concepts);
   let queue = [...flashcards];
   let correctAnswers = 0;
