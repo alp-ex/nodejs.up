@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stock Updates</title>
+    <style>
+      body {
+        transition: background-color 0.5s ease;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Stock Updates</h1>
+    <div id="stock-data">
+      <p>Current price: <span id="current-price"></span></p>
+      <p>Change: <span id="change"></span></p>
+      <p>Percent change: <span id="percent-change"></span></p>
+      <p>High price of the day: <span id="high-price"></span></p>
+      <p>Low price of the day: <span id="low-price"></span></p>
+      <p>Open price of the day: <span id="open-price"></span></p>
+      <p>Previous close price: <span id="previous-close"></span></p>
+    </div>
+
+    <script>
+      const eventSource = new EventSource("/stock");
+
+      eventSource.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+        document.getElementById("current-price").innerText = data.c;
+        document.getElementById("change").innerText = data.d;
+        document.getElementById("percent-change").innerText = data.dp;
+        document.getElementById("high-price").innerText = data.h;
+        document.getElementById("low-price").innerText = data.l;
+        document.getElementById("open-price").innerText = data.o;
+        document.getElementById("previous-close").innerText = data.pc;
+
+        // Update the background color
+        document.body.style.backgroundColor = data.color;
+      };
+    </script>
+  </body>
+</html>
